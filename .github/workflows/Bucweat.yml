@@ -50,6 +50,7 @@ jobs:
         repository: 'bucweat/duckdbDotNetOdbcTests'
         
     -name: Build and Run duckdbDotNetOdbcTests
+      shell: bash
       run: |
         duckdbDotNetOdbcTests\build.bat
         duckdbDotNetOdbcTests\build\Release\SystemDataODBC_tests.exe
