@@ -45,11 +45,12 @@ jobs:
       with:
         fetch-depth: 0
     
-    name: Build bucweat/duckdbDotNetOdbcTests
     - uses: actions/checkout@v4
       with:
         repository: 'bucweat/duckdbDotNetOdbcTests'
-      run:
+        
+    -name: Build and Run duckdbDotNetOdbcTests
+      run: |
         duckdbDotNetOdbcTests\build.bat
         duckdbDotNetOdbcTests\build\Release\SystemDataODBC_tests.exe
 
