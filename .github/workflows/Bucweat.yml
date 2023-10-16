@@ -1,4 +1,4 @@
-name: bucweat
+name: Bucweat
 on:
   workflow_dispatch:
   repository_dispatch:
