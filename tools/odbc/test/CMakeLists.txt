@@ -25,10 +25,14 @@ add_executable(
   tests/quotes.cpp
   tests/result_conversion.cpp)
 
-if(CMAKE_GENERATOR MATCHES "Visual Studio")
-  # System.Data.ODBC tests Visual Studio Generator due to use of C++ CLI and
-  # .NET.
-  add_subdirectory(tests/dotnet)
+if(MSVC)
+  if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    # System.Data.ODBC tests require cmake Visual Studio Generator 
+    # due to use of C++ CLI and .NET.
+    add_subdirectory(tests/dotnet)
+  else()
+    message(WARNING "For Windows build, dotnet tests require 'Visual Studio' cmake generator (you're using ${CMAKE_GENERATOR})")
+  endif()
 endif()
 
 target_link_libraries(test_odbc duckdb_odbc ODBC::ODBC)
