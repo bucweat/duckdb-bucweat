@@ -31,7 +31,10 @@ if(MSVC)
     # due to use of C++ CLI and .NET.
     add_subdirectory(tests/dotnet)
   else()
-    message(WARNING "For Windows build, dotnet tests require 'Visual Studio' cmake generator (you're using ${CMAKE_GENERATOR})")
+    message(
+      WARNING
+        "For Windows build, dotnet tests require 'Visual Studio' cmake generator (you're using ${CMAKE_GENERATOR})"
+    )
   endif()
 endif()
 

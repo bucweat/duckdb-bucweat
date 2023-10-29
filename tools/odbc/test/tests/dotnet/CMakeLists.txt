@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 # for case when building standalone (for development)
 get_directory_property(hasParent PARENT_DIRECTORY)
 if(NOT hasParent)
-    include_directories(../../../../../third_party/catch/)
+  include_directories(../../../../../third_party/catch/)
 endif()
 
 project(

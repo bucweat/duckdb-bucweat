@@ -71,22 +71,19 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 
 		OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
-
-		//https://duckdb.org/docs/sql/data_types/overview#nested--composite-types
-		//LIST		An ordered sequence of data values of the same type.
+		// https://duckdb.org/docs/sql/data_types/overview#nested--composite-types
+		// LIST		An ordered sequence of data values of the same type.
 		//			Each row must have the same data type within each LIST, but can have any number of elements.
 		//			[1, 2, 3]	INT[ ]
-		//STRUCT	A dictionary of multiple named values, where each key is a string, but the value can be a different type for each key.
-		//			Each row must have the same keys.
+		// STRUCT	A dictionary of multiple named values, where each key is a string, but the value can be a different
+		// type for each key. 			Each row must have the same keys.
 		//			{'i': 42, 'j': 'a'}	STRUCT(i INT, j VARCHAR)
-		//MAP		A dictionary of multiple named values, each key having the same type and each value having the same type.
-		//			Keys and values can be any type and can be different types from one another.
-		//			Rows may have different keys.
-		//			map([1, 2], ['a', 'b'])	MAP(INT, VARCHAR)
-		//UNION		A union of multiple alternative data types, storing one of them in each value at a time.
-		//			A union also contains a discriminator “tag” value to inspect and access the currently set member type.
-		//			Rows may be set to different member types of the union.	union_value(num := 2)
-		//			UNION(num INT, text VARCHAR)
+		// MAP		A dictionary of multiple named values, each key having the same type and each value having the same
+		// type. 			Keys and values can be any type and can be different types from one another. 			Rows may have different
+		//keys. 			map([1, 2], ['a', 'b'])	MAP(INT, VARCHAR) UNION		A union of multiple alternative data types, storing
+		// one of them in each value at a time. 			A union also contains a discriminator “tag” value to inspect and access
+		//the currently set member type. 			Rows may be set to different member types of the union.	union_value(num :=
+		//2) 			UNION(num INT, text VARCHAR)
 
 		/////////////////////////////////////////////////////////////////
 		// create weather table
@@ -164,12 +161,12 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		REQUIRE(toss(dt->Rows[0]->ItemArray[3]->ToString()) == "11/27/1994 12:00:00 AM");
 
 		/////////////////////////////////////////////////////////////////
-        // Fill() Dataset then look at the Datatable
+		// Fill() Dataset then look at the Datatable
 		delete dt;
 		dt = gcnew DataTable();
-        DataSet ^ ds = gcnew DataSet();
-        adapter->Fill(ds);
-        dt = ds->Tables[0];
+		DataSet ^ ds = gcnew DataSet();
+		adapter->Fill(ds);
+		dt = ds->Tables[0];
 		REQUIRE(dt->Rows->Count == 1);
 		REQUIRE(dt->Columns->Count == 4);
 		REQUIRE(toss(dt->Columns[0]->ColumnName) == "city");
@@ -184,7 +181,7 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		REQUIRE(toss(dt->Rows[0]->ItemArray[1]->ToString()) == "46");
 		REQUIRE(toss(dt->Rows[0]->ItemArray[2]->ToString()) == "0.25");
 		REQUIRE(toss(dt->Rows[0]->ItemArray[3]->ToString()) == "11/27/1994 12:00:00 AM");
-        
+
 		delete dt;
 		delete adapter;
 
@@ -259,7 +256,7 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 				l LONG
 			);
 		)";
-	    REQUIRE(-1 == DbCmd->ExecuteNonQuery());
+		REQUIRE(-1 == DbCmd->ExecuteNonQuery());
 
 		DbCmd->CommandText = R"(
 		    INSERT INTO biginttest VALUES
@@ -334,7 +331,7 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		adapter->Fill(dt);
 		std::cout.rdbuf(old_buf);
 
-		REQUIRE(dt->Rows->Count ==7);
+		REQUIRE(dt->Rows->Count == 7);
 		REQUIRE(dt->Columns->Count == 5);
 		REQUIRE(toss(dt->Columns[0]->ColumnName) == "dbl");
 		REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Double");
@@ -407,10 +404,10 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		REQUIRE(dt->Rows->Count == 2);
 		REQUIRE(dt->Columns->Count == 1);
 		REQUIRE(toss(dt->Columns[0]->ColumnName) == "hi");
-		//INFO(toss(dt->Columns[0]->DataType->ToString()));
+		// INFO(toss(dt->Columns[0]->DataType->ToString()));
 
-		// ODBC largest int type is SQL_BIGINT which is 8 bytes, 
-        // so huge_int converted to double with loss of precision
+		// ODBC largest int type is SQL_BIGINT which is 8 bytes,
+		// so huge_int converted to double with loss of precision
 		// since it is a double, no [easy] way to compare
 		REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Double");
 
@@ -477,9 +474,9 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		rtnVal_i32 = static_cast<Int32>(dt->Rows[1]->ItemArray[2]);
 		REQUIRE(rtnVal_i32 == 2147483647);
 
-		//OdbcException : {ERROR [42000] ODBC_DuckDB->PrepareStmt
-		//Conversion Error: Type INT64 with value -2147483649 can't be cast because the
-		//value is out of range for the destination type INT32}
+		// OdbcException : {ERROR [42000] ODBC_DuckDB->PrepareStmt
+		// Conversion Error: Type INT64 with value -2147483649 can't be cast because the
+		// value is out of range for the destination type INT32}
 		DbCmd->CommandText = R"(
 			INSERT INTO
 				int4b
@@ -493,7 +490,7 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 			             Catch::Matchers::Contains("is out of range for the destination type INT32"));
 		}
 
-		//ERROR[42000] ODBC_DuckDB->PrepareStmt Binder Error
+		// ERROR[42000] ODBC_DuckDB->PrepareStmt Binder Error
 		//: table int4b has 3 columns but 1 values were supplied
 		DbCmd->CommandText = R"(
 			INSERT INTO
@@ -510,7 +507,6 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 
 		/////////////////////////////////////////////////////////////////
 		// INTERVAL	 								date / time delta
-
 
 		/////////////////////////////////////////////////////////////////
 		// REAL			FLOAT4, FLOAT				single precision floating-point number (4 bytes)
@@ -598,9 +594,9 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		rtnVal_i16 = static_cast<Int16>(dt->Rows[1]->ItemArray[1]);
 		REQUIRE(rtnVal_i16 == 32767);
 
-		//OdbcException : {ERROR [42000] ODBC_DuckDB->PrepareStmt
-		//Conversion Error: Type INT32 with value -32769 can't be cast because the
-		//value is out of range for the destination type INT16}
+		// OdbcException : {ERROR [42000] ODBC_DuckDB->PrepareStmt
+		// Conversion Error: Type INT32 with value -32769 can't be cast because the
+		// value is out of range for the destination type INT16}
 		DbCmd->CommandText = R"(
 			INSERT INTO
 				int2b
@@ -610,7 +606,8 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		try {
 			DbCmd->ExecuteNonQuery();
 		} catch (OdbcException ^ ex) {
-			REQUIRE_THAT(toss(ex->Message), Catch::Matchers::Contains("is out of range for the destination type INT16"));
+			REQUIRE_THAT(toss(ex->Message),
+			             Catch::Matchers::Contains("is out of range for the destination type INT16"));
 		}
 
 		/////////////////////////////////////////////////////////////////
@@ -667,9 +664,9 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		rtnVal_i16 = static_cast<INT16>(dt->Rows[1]->ItemArray[1]);
 		REQUIRE(rtnVal_i16 == 127);
 
-		//ERROR [42000] ODBC_DuckDB->PrepareStmt
-		//Conversion Error: Type INT32 with value -129 can't be cast because the value
-		//is out of range for the destination type INT8
+		// ERROR [42000] ODBC_DuckDB->PrepareStmt
+		// Conversion Error: Type INT32 with value -129 can't be cast because the value
+		// is out of range for the destination type INT8
 		DbCmd->CommandText = R"(
 			INSERT INTO
 				sti
@@ -679,8 +676,7 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		try {
 			DbCmd->ExecuteNonQuery();
 		} catch (OdbcException ^ ex) {
-			REQUIRE_THAT(toss(ex->Message),
-				Catch::Matchers::Contains("is out of range for the destination type INT8"));
+			REQUIRE_THAT(toss(ex->Message), Catch::Matchers::Contains("is out of range for the destination type INT8"));
 		}
 
 		/////////////////////////////////////////////////////////////////
@@ -712,7 +708,7 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		REQUIRE(toss(dt->Columns[0]->ColumnName) == "ubi");
 
 		// expecting UInt64 but received Decimal (floating point number)
-		//REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.UInt64");
+		// REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.UInt64");
 		REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Decimal");
 
 		rtnVal_dec = static_cast<Decimal>(dt->Rows[0]->ItemArray[0]);
@@ -746,7 +742,7 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		REQUIRE(dt->Columns->Count == 1);
 		REQUIRE(toss(dt->Columns[0]->ColumnName) == "ui");
 		// expecting UInt32 but get Int64
-		//REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.UInt32");
+		// REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.UInt32");
 		REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Int64");
 
 		rtnVal_i64 = static_cast<Int64>(dt->Rows[0]->ItemArray[0]);
@@ -847,18 +843,16 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 
 		std::cout.rdbuf(old_buf);
 
-		//REQUIRE(dt->Rows->Count == 2);
-		//REQUIRE(dt->Columns->Count == 1);
-		//REQUIRE(toss(dt->Columns[0]->ColumnName) == "id");
-		//REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Byte");
+		// REQUIRE(dt->Rows->Count == 2);
+		// REQUIRE(dt->Columns->Count == 1);
+		// REQUIRE(toss(dt->Columns[0]->ColumnName) == "id");
+		// REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Byte");
 
-		//rtnVal_ui8 = static_cast<UINT8>(dt->Rows[0]->ItemArray[0]);
-		//REQUIRE(rtnVal_ui8 == 255);
+		// rtnVal_ui8 = static_cast<UINT8>(dt->Rows[0]->ItemArray[0]);
+		// REQUIRE(rtnVal_ui8 == 255);
 
 		/////////////////////////////////////////////////////////////////
 		// VARCHAR		CHAR, BPCHAR, TEXT, STRING	variable-length character string
-
-
 
 	} catch (OdbcException ^ ex) {
 
