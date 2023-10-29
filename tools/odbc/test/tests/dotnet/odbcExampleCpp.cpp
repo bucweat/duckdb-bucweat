@@ -26,14 +26,40 @@ static std::string toss(System::String ^ s) {
 	return returnString;
 }
 
+//*************************************************************
+// requires at least C++11
+const std::string vformat(const char *const zcFormat, ...) {
+
+	// initialize use of the variable argument array
+	va_list vaArgs;
+	va_start(vaArgs, zcFormat);
+
+	// reliably acquire the size
+	// from a copy of the variable argument array
+	// and a functionally reliable call to mock the formatting
+	va_list vaArgsCopy;
+	va_copy(vaArgsCopy, vaArgs);
+	const int iLen = std::vsnprintf(NULL, 0, zcFormat, vaArgsCopy);
+	va_end(vaArgsCopy);
+
+	// return a formatted string without risking memory mismanagement
+	// and without assuming any compiler or platform specific behavior
+	std::vector<char> zc(iLen + 1);
+	std::vsnprintf(zc.data(), zc.size(), zcFormat, vaArgs);
+	va_end(vaArgs);
+	return std::string(zc.data(), iLen);
+}
+
 TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 
 	OdbcConnection ^ Conn = nullptr;
 	try {
 		int rtnVal_i = 0;
+		INT8 rtnVal_i8 = 0;
 		Int16 rtnVal_i16 = 0;
 		Int32 rtnVal_i32 = 0;
 		Int64 rtnVal_i64 = 0;
+		UINT8 rtnVal_ui8 = 0;
 		UInt16 rtnVal_ui16 = 0;
 		UInt32 rtnVal_ui32 = 0;
 		UInt64 rtnVal_ui64 = 0;
@@ -189,8 +215,39 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		REQUIRE(1 == citiesCount);
 
 		/////////////////////////////////////////////////////////////////
+		// Use DataReader and access the data.
+		DbCmd->CommandText = R"(
+			select * from weather;
+		)";
+		OdbcDataReader ^ DbReader = DbCmd->ExecuteReader();
+
+		REQUIRE(DbReader->HasRows == true);
+		REQUIRE(DbReader->FieldCount == 5);
+		REQUIRE(toss(DbReader->GetName(0)) == "city");
+		REQUIRE(toss(DbReader->GetName(1)) == "temp_lo");
+		REQUIRE(toss(DbReader->GetName(2)) == "temp_hi");
+		REQUIRE(toss(DbReader->GetName(3)) == "prcp");
+		REQUIRE(toss(DbReader->GetName(4)) == "date");
+
+		DbReader->Read();
+		REQUIRE(toss(DbReader->GetString(0)) == "San Francisco");
+		REQUIRE(toss(DbReader->GetString(1)) == "46");
+		REQUIRE(toss(DbReader->GetString(2)) == "50");
+		REQUIRE(toss(DbReader->GetString(3)) == "0.25");
+		REQUIRE(toss(DbReader->GetString(4)) == "1994-11-27");
+
+		REQUIRE(DbReader->RecordsAffected == -1);
+
+		DbReader->Close();
+		delete DbReader;
+
+		/////////////////////////////////////////////////////////////////
+		/////////////////////////////////////////////////////////////////
+		/////////////////////////////////////////////////////////////////
 		// look at how ODBC handles all of the DuckDB supported data types
 		// https://duckdb.org/docs/sql/data_types/overview#general-purpose-data-types
+		/////////////////////////////////////////////////////////////////
+		/////////////////////////////////////////////////////////////////
 		/////////////////////////////////////////////////////////////////
 
 		/////////////////////////////////////////////////////////////////
@@ -232,10 +289,15 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 
 		/////////////////////////////////////////////////////////////////
 		// BIT			BITSTRING					string of 1’s and 0’s
+
+		/////////////////////////////////////////////////////////////////
 		// BOOLEAN		BOOL, LOGICAL				logical boolean (true/false)
+
+		/////////////////////////////////////////////////////////////////
 		// BLOB			BYTEA, BINARY, VARBINARY	variable-length binary data
+
+		/////////////////////////////////////////////////////////////////
 		// DATE	 									calendar date (year, month day)
-		// DECIMAL(prec, scale)	 					fixed-precision number with the given width (precision) and scale
 
 		/////////////////////////////////////////////////////////////////
 		// DOUBLE		FLOAT8, NUMERIC, DECIMAL	double precision floating-point number (8 bytes)
@@ -250,6 +312,7 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		)";
 		REQUIRE(-1 == DbCmd->ExecuteNonQuery());
 
+		// note here that inserting oversized value (row 7) is converted to Infinity.
 		DbCmd->CommandText = R"(
 			INSERT INTO
 				doubletest
@@ -259,7 +322,8 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 				('-Infinity','-Infinity',1.0, 123456789012345.123, 123456789012345678901.123),
 				('Infinity','Infinity',1.0, 123456789012345.123, 123456789012345678901.123),
 				('NaN','NaN',1.0, 123456789012345.123, 123456789012345678901.123),
-				(0,0,1.0, 123456789012345.123, 123456789012345678901.123);
+				(0,0,1.0, 123456789012345.123, 123456789012345678901.123),
+				(1.8e+309,1.0,1.0,1.0,1.0);
 		)";
 		rtnVal_i = DbCmd->ExecuteNonQuery();
 		REQUIRE(1 == rtnVal_i);
@@ -270,7 +334,7 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		adapter->Fill(dt);
 		std::cout.rdbuf(old_buf);
 
-		REQUIRE(dt->Rows->Count == 6);
+		REQUIRE(dt->Rows->Count ==7);
 		REQUIRE(dt->Columns->Count == 5);
 		REQUIRE(toss(dt->Columns[0]->ColumnName) == "dbl");
 		REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Double");
@@ -295,6 +359,18 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 
 		rtnVal_d = static_cast<double>(dt->Rows[0]->ItemArray[3]);
 		REQUIRE_THAT(rtnVal_d, Catch::Matchers::WithinAbs(123456789012345.123, 0.001));
+
+		rtnVal_d = static_cast<double>(dt->Rows[2]->ItemArray[0]);
+		REQUIRE(rtnVal_d == -std::numeric_limits<double>::infinity());
+
+		rtnVal_d = static_cast<double>(dt->Rows[3]->ItemArray[0]);
+		REQUIRE(rtnVal_d == std::numeric_limits<double>::infinity());
+
+		rtnVal_d = static_cast<double>(dt->Rows[4]->ItemArray[0]);
+		REQUIRE(std::isnan(rtnVal_d) == true);
+
+		rtnVal_d = static_cast<double>(dt->Rows[6]->ItemArray[0]);
+		REQUIRE(rtnVal_d == std::numeric_limits<double>::infinity());
 
 		// ODBC only has double, so loss of precision makes this the best we can do...
 		rtnVal_d = static_cast<double>(dt->Rows[0]->ItemArray[4]);
@@ -335,8 +411,21 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 
 		// ODBC largest int type is SQL_BIGINT which is 8 bytes, 
         // so huge_int converted to double with loss of precision
-		// since it is a double, no way to compare
+		// since it is a double, no [easy] way to compare
 		REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Double");
+
+		DbCmd->CommandText = R"(
+			INSERT INTO
+				huge_int
+			VALUES
+				(170141183460469231731687303715884105728);
+		)";
+		try {
+			DbCmd->ExecuteNonQuery();
+		} catch (OdbcException ^ ex) {
+			REQUIRE_THAT(toss(ex->Message),
+			             Catch::Matchers::Contains("is out of range for the destination type INT128"));
+		}
 
 		/////////////////////////////////////////////////////////////////
 		// INTEGER		INT4, INT, SIGNED			signed four-byte integer
@@ -387,6 +476,37 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		REQUIRE(rtnVal_i32 == 2147483647);
 		rtnVal_i32 = static_cast<Int32>(dt->Rows[1]->ItemArray[2]);
 		REQUIRE(rtnVal_i32 == 2147483647);
+
+		//OdbcException : {ERROR [42000] ODBC_DuckDB->PrepareStmt
+		//Conversion Error: Type INT64 with value -2147483649 can't be cast because the
+		//value is out of range for the destination type INT32}
+		DbCmd->CommandText = R"(
+			INSERT INTO
+				int4b
+			VALUES
+				(-2147483649,-2147483649,-2147483649);
+		)";
+		try {
+			DbCmd->ExecuteNonQuery();
+		} catch (OdbcException ^ ex) {
+			REQUIRE_THAT(toss(ex->Message),
+			             Catch::Matchers::Contains("is out of range for the destination type INT32"));
+		}
+
+		//ERROR[42000] ODBC_DuckDB->PrepareStmt Binder Error
+		//: table int4b has 3 columns but 1 values were supplied
+		DbCmd->CommandText = R"(
+			INSERT INTO
+				int4b
+			VALUES
+				(1);
+		)";
+		try {
+			DbCmd->ExecuteNonQuery();
+		} catch (OdbcException ^ ex) {
+			REQUIRE_THAT(toss(ex->Message),
+			             Catch::Matchers::Contains("table int4b has 3 columns but 1 values were supplied"));
+		}
 
 		/////////////////////////////////////////////////////////////////
 		// INTERVAL	 								date / time delta
@@ -478,14 +598,91 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		rtnVal_i16 = static_cast<Int16>(dt->Rows[1]->ItemArray[1]);
 		REQUIRE(rtnVal_i16 == 32767);
 
+		//OdbcException : {ERROR [42000] ODBC_DuckDB->PrepareStmt
+		//Conversion Error: Type INT32 with value -32769 can't be cast because the
+		//value is out of range for the destination type INT16}
+		DbCmd->CommandText = R"(
+			INSERT INTO
+				int2b
+			VALUES
+				(-32769,-32769);
+		)";
+		try {
+			DbCmd->ExecuteNonQuery();
+		} catch (OdbcException ^ ex) {
+			REQUIRE_THAT(toss(ex->Message), Catch::Matchers::Contains("is out of range for the destination type INT16"));
+		}
 
+		/////////////////////////////////////////////////////////////////
 		// TIME	 									time of day (no time zone)
+
+		/////////////////////////////////////////////////////////////////
 		// TIMESTAMP		DATETIME					combination of time and date
+
+		/////////////////////////////////////////////////////////////////
 		// TIMESTAMP WITH TIME ZONE	TIMESTAMPTZ		combination of time and date that uses the current time zone
 
 		/////////////////////////////////////////////////////////////////
 		// TINYINT		INT1						signed one-byte integer
-		
+		DbCmd->CommandText = R"(
+			CREATE OR REPLACE TABLE sti(
+				sti TINYINT,
+				i1	INT1
+			);
+		)";
+		REQUIRE(-1 == DbCmd->ExecuteNonQuery());
+
+		DbCmd->CommandText = R"(
+			INSERT INTO
+				sti
+			VALUES
+				(-128,-128),
+				(127,127);
+		)";
+		rtnVal_i = DbCmd->ExecuteNonQuery();
+		REQUIRE(1 == rtnVal_i);
+
+		adapter = gcnew OdbcDataAdapter("select * from sti;", Conn);
+		dt = gcnew DataTable();
+		old_buf = std::cout.rdbuf(ss.rdbuf());
+		adapter->Fill(dt);
+		std::cout.rdbuf(old_buf);
+
+		REQUIRE(dt->Rows->Count == 2);
+		REQUIRE(dt->Columns->Count == 2);
+		REQUIRE(toss(dt->Columns[0]->ColumnName) == "sti");
+		REQUIRE(toss(dt->Columns[1]->ColumnName) == "i1");
+
+		// expected "System.Byte" but got "System.Int16"
+		REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Int16");
+		REQUIRE(toss(dt->Columns[1]->DataType->ToString()) == "System.Int16");
+
+		rtnVal_i16 = static_cast<INT16>(dt->Rows[0]->ItemArray[0]);
+		REQUIRE(rtnVal_i16 == -128);
+		rtnVal_i16 = static_cast<INT16>(dt->Rows[0]->ItemArray[1]);
+		REQUIRE(rtnVal_i16 == -128);
+
+		rtnVal_i16 = static_cast<INT16>(dt->Rows[1]->ItemArray[0]);
+		REQUIRE(rtnVal_i16 == 127);
+		rtnVal_i16 = static_cast<INT16>(dt->Rows[1]->ItemArray[1]);
+		REQUIRE(rtnVal_i16 == 127);
+
+		//ERROR [42000] ODBC_DuckDB->PrepareStmt
+		//Conversion Error: Type INT32 with value -129 can't be cast because the value
+		//is out of range for the destination type INT8
+		DbCmd->CommandText = R"(
+			INSERT INTO
+				sti
+			VALUES
+				(-129,-129);
+		)";
+		try {
+			DbCmd->ExecuteNonQuery();
+		} catch (OdbcException ^ ex) {
+			REQUIRE_THAT(toss(ex->Message),
+				Catch::Matchers::Contains("is out of range for the destination type INT8"));
+		}
+
 		/////////////////////////////////////////////////////////////////
 		// UBIGINT	 								unsigned eight-byte integer
 		DbCmd->CommandText = R"(
@@ -591,9 +788,72 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 
 		/////////////////////////////////////////////////////////////////
 		// UTINYINT	 								unsigned one-byte integer
+		DbCmd->CommandText = R"(
+			CREATE OR REPLACE TABLE usti(
+				usti UTINYINT
+			);
+		)";
+		REQUIRE(-1 == DbCmd->ExecuteNonQuery());
+
+		DbCmd->CommandText = R"(
+			INSERT INTO
+				usti
+			VALUES
+				(255);
+		)";
+		rtnVal_i = DbCmd->ExecuteNonQuery();
+		REQUIRE(1 == rtnVal_i);
+
+		adapter = gcnew OdbcDataAdapter("select * from usti;", Conn);
+		dt = gcnew DataTable();
+		old_buf = std::cout.rdbuf(ss.rdbuf());
+		adapter->Fill(dt);
+		std::cout.rdbuf(old_buf);
+
+		REQUIRE(dt->Rows->Count == 1);
+		REQUIRE(dt->Columns->Count == 1);
+		REQUIRE(toss(dt->Columns[0]->ColumnName) == "usti");
+		// expecting UInt16 but get Int32
+		// REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.UInt16");
+		REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Byte");
+
+		rtnVal_ui8 = static_cast<UINT8>(dt->Rows[0]->ItemArray[0]);
+		REQUIRE(rtnVal_ui8 == 255);
 
 		/////////////////////////////////////////////////////////////////
 		// UUID	 									UUID data type
+		DbCmd->CommandText = R"(
+			CREATE OR REPLACE TABLE uuid(
+				id UUID
+			);
+		)";
+		REQUIRE(-1 == DbCmd->ExecuteNonQuery());
+
+		DbCmd->CommandText = R"(
+			INSERT INTO
+				uuid
+			VALUES
+				(uuid());
+		)";
+		rtnVal_i = DbCmd->ExecuteNonQuery();
+		REQUIRE(1 == rtnVal_i);
+
+		adapter = gcnew OdbcDataAdapter("select * from uuid;", Conn);
+		dt = gcnew DataTable();
+		old_buf = std::cout.rdbuf(ss.rdbuf());
+
+		// causes exception Unknown SQL type - -1376.
+		// adapter->Fill(dt);
+
+		std::cout.rdbuf(old_buf);
+
+		//REQUIRE(dt->Rows->Count == 2);
+		//REQUIRE(dt->Columns->Count == 1);
+		//REQUIRE(toss(dt->Columns[0]->ColumnName) == "id");
+		//REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Byte");
+
+		//rtnVal_ui8 = static_cast<UINT8>(dt->Rows[0]->ItemArray[0]);
+		//REQUIRE(rtnVal_ui8 == 255);
 
 		/////////////////////////////////////////////////////////////////
 		// VARCHAR		CHAR, BPCHAR, TEXT, STRING	variable-length character string
