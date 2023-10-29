@@ -79,11 +79,14 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		// type for each key. 			Each row must have the same keys.
 		//			{'i': 42, 'j': 'a'}	STRUCT(i INT, j VARCHAR)
 		// MAP		A dictionary of multiple named values, each key having the same type and each value having the same
-		// type. 			Keys and values can be any type and can be different types from one another. 			Rows may have different
-		//keys. 			map([1, 2], ['a', 'b'])	MAP(INT, VARCHAR) UNION		A union of multiple alternative data types, storing
-		// one of them in each value at a time. 			A union also contains a discriminator “tag” value to inspect and access
-		//the currently set member type. 			Rows may be set to different member types of the union.	union_value(num :=
-		//2) 			UNION(num INT, text VARCHAR)
+		// type. 			Keys and values can be any type and can be different types from one another. 			Rows may have
+		// different
+		// keys. 			map([1, 2], ['a', 'b'])	MAP(INT, VARCHAR) UNION		A union of multiple alternative data types,
+		// storing
+		// one of them in each value at a time. 			A union also contains a discriminator “tag” value to inspect and
+		// access
+		// the currently set member type. 			Rows may be set to different member types of the union.	union_value(num
+		// := 2) 			UNION(num INT, text VARCHAR)
 
 		/////////////////////////////////////////////////////////////////
 		// create weather table

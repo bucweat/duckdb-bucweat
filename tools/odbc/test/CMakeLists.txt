@@ -27,8 +27,8 @@ add_executable(
 
 if(MSVC)
   if(CMAKE_GENERATOR MATCHES "Visual Studio")
-    # System.Data.ODBC tests require cmake Visual Studio Generator 
-    # due to use of C++ CLI and .NET.
+    # System.Data.ODBC tests require cmake Visual Studio Generator due to use of
+    # C++ CLI and .NET.
     add_subdirectory(tests/dotnet)
   else()
     message(
