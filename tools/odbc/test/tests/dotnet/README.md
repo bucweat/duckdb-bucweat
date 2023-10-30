@@ -49,6 +49,10 @@ MSBuild version 17.7.2+d6990bcfa for .NET Framework
 
 To execute tests, run `build\Release\SystemDataODBC_tests.exe`.
 
+Combined build and run including successful tests in output:
+
+`cls & build.bat debug & build\Debug\SystemDataODBC_tests.exe -s`
+
 
 Once you've built with the batch file, you'll have a local build folder. Included 
 in this folder is a Visual Studio solution file. The solution file allows you to

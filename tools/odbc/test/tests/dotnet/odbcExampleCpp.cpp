@@ -64,6 +64,7 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		UInt32 rtnVal_ui32 = 0;
 		UInt64 rtnVal_ui64 = 0;
 		Decimal rtnVal_dec = 0;
+		DateTime rtnVal_dt;
 		double rtnVal_d = 0;
 		System::String ^ connStr = "Driver=DuckDB Driver;Database=test.duckdb;";
 		Conn = gcnew OdbcConnection(connStr);
@@ -283,6 +284,31 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 
 		/////////////////////////////////////////////////////////////////
 		// DATE	 									calendar date (year, month day)
+		try {
+			adapter = gcnew OdbcDataAdapter("SELECT DATE '1992-09-20' as d, DATE '1992-03-22' + 5 as d2, 'epoch'::DATE as e;", Conn);
+			dt = gcnew DataTable();
+			old_buf = std::cout.rdbuf(ss.rdbuf());
+			adapter->Fill(dt);
+			std::cout.rdbuf(old_buf);
+			REQUIRE(dt->Rows->Count == 1);
+			REQUIRE(dt->Columns->Count == 3);
+			REQUIRE(toss(dt->Columns[0]->ColumnName) == "d");
+			REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
+			REQUIRE(toss(dt->Columns[1]->ColumnName) == "d2");
+			REQUIRE(toss(dt->Columns[1]->DataType->ToString()) == "System.DateTime");
+			REQUIRE(toss(dt->Columns[2]->ColumnName) == "e");
+			REQUIRE(toss(dt->Columns[2]->DataType->ToString()) == "System.DateTime");
+			rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[0]);
+			REQUIRE(toss(rtnVal_dt.ToString()) == "9/20/1992 12:00:00 AM");
+			rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[1]);
+			REQUIRE(toss(rtnVal_dt.ToString()) == "3/27/1992 12:00:00 AM");
+			rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[2]);
+			REQUIRE(toss(rtnVal_dt.ToString()) == "1/1/1970 12:00:00 AM");
+		} catch (OdbcException ^ ex) {
+			WARN("DATE OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		} catch (Exception ^ ex) {
+			WARN("DATE Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		}
 
 		/////////////////////////////////////////////////////////////////
 		// DOUBLE		FLOAT8, NUMERIC, DECIMAL	double precision floating-point number (8 bytes)
@@ -600,9 +626,180 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 
 		/////////////////////////////////////////////////////////////////
 		// TIME	 									time of day (no time zone)
+		//DbCmd->CommandText = R"(
+		//	CREATE OR REPLACE TABLE time(
+		//		t TIME
+		//	);
+		//)";
+		//REQUIRE(-1 == DbCmd->ExecuteNonQuery());
+
+		//DbCmd->CommandText = R"(
+		//	INSERT INTO
+		//		time
+		//	VALUES
+		//		(get_current_time());
+		//)";
+		//rtnVal_i = DbCmd->ExecuteNonQuery();
+		//REQUIRE(1 == rtnVal_i);
+
+		//adapter = gcnew OdbcDataAdapter("select * from time;", Conn);
+		//dt = gcnew DataTable();
+		//old_buf = std::cout.rdbuf(ss.rdbuf());
+		//adapter->Fill(dt);
+		//std::cout.rdbuf(old_buf);
+
+		//REQUIRE(dt->Rows->Count == 1);
+		//REQUIRE(dt->Columns->Count == 1);
+		//REQUIRE(toss(dt->Columns[0]->ColumnName) == "t");
+		//REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
+
+		try {
+			adapter = gcnew OdbcDataAdapter("SELECT TIME '1992-09-20 11:30:00.123456' as t;", Conn);
+			dt = gcnew DataTable();
+			old_buf = std::cout.rdbuf(ss.rdbuf());
+			adapter->Fill(dt);
+			std::cout.rdbuf(old_buf);
+			REQUIRE(dt->Rows->Count == 1);
+			REQUIRE(dt->Columns->Count == 3);
+			REQUIRE(toss(dt->Columns[0]->ColumnName) == "t");
+			REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
+			rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[0]);
+			REQUIRE(toss(rtnVal_dt.ToString()) == "11:30:00 AM");
+		} catch (OdbcException ^ ex) {
+			WARN("DATE OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		} catch (Exception ^ ex) {
+			WARN("DATE Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		}
+
+		try {
+			adapter = gcnew OdbcDataAdapter("SELECT get_current_time() as t;", Conn);
+			dt = gcnew DataTable();
+			old_buf = std::cout.rdbuf(ss.rdbuf());
+			adapter->Fill(dt);
+			std::cout.rdbuf(old_buf);
+			REQUIRE(dt->Rows->Count == 1);
+			REQUIRE(dt->Columns->Count == 3);
+			REQUIRE(toss(dt->Columns[0]->ColumnName) == "t");
+			REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
+			rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[0]);
+			REQUIRE(toss(rtnVal_dt.ToString()) == "11:30:00 AM");
+		} catch (OdbcException ^ ex) {
+			WARN("DATE OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		} catch (Exception ^ ex) {
+			WARN("DATE Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		}
+
 
 		/////////////////////////////////////////////////////////////////
 		// TIMESTAMP		DATETIME					combination of time and date
+
+		try {
+			adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP_NS '1992-09-20 11:30:00.123456' as dt;", Conn);
+			dt = gcnew DataTable();
+			old_buf = std::cout.rdbuf(ss.rdbuf());
+			adapter->Fill(dt);
+			std::cout.rdbuf(old_buf);
+			REQUIRE(dt->Rows->Count == 1);
+			REQUIRE(dt->Columns->Count == 1);
+			REQUIRE(toss(dt->Columns[0]->ColumnName) == "dt");
+			REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
+		} catch (OdbcException ^ ex) {
+			WARN("TIMESTAMP OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		} catch (Exception ^ ex) {
+			WARN("TIMESTAMP Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		}
+
+		try {
+			adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP_MS '1992-09-20 11:30:00.123456' as dt;", Conn);
+			dt = gcnew DataTable();
+			old_buf = std::cout.rdbuf(ss.rdbuf());
+			adapter->Fill(dt);
+			std::cout.rdbuf(old_buf);
+			REQUIRE(dt->Rows->Count == 1);
+			REQUIRE(dt->Columns->Count == 1);
+			REQUIRE(toss(dt->Columns[0]->ColumnName) == "dt");
+			REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
+		} catch (OdbcException ^ ex) {
+			WARN("TIMESTAMP OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		} catch (Exception ^ ex) {
+			WARN("TIMESTAMP Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		}
+
+		try {
+			adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP_S '1992-09-20 11:30:00.123456' as dt;", Conn);
+			dt = gcnew DataTable();
+			old_buf = std::cout.rdbuf(ss.rdbuf());
+			adapter->Fill(dt);
+			std::cout.rdbuf(old_buf);
+			REQUIRE(dt->Rows->Count == 1);
+			REQUIRE(dt->Columns->Count == 1);
+			REQUIRE(toss(dt->Columns[0]->ColumnName) == "dt");
+			REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
+			// expected TBD
+			rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[0]);
+			REQUIRE(toss(rtnVal_dt.ToString()) == "9/20/1992 12:00:00 AM");
+		} catch (OdbcException ^ ex) {
+			WARN("TIMESTAMP OdbcException[" << __LINE__<< "]: {" << toss(ex->Message) << "}");
+		} catch (Exception ^ ex) {
+			WARN("TIMESTAMP Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		}
+
+		try {
+			adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP '1992-09-20 11:30:00.123456' as dt;", Conn);
+			dt = gcnew DataTable();
+			old_buf = std::cout.rdbuf(ss.rdbuf());
+			adapter->Fill(dt);
+			std::cout.rdbuf(old_buf);
+			REQUIRE(dt->Rows->Count == 1);
+			REQUIRE(dt->Columns->Count == 1);
+			REQUIRE(toss(dt->Columns[0]->ColumnName) == "dt");
+			REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
+			// expected date and time but time is set to default 12:00:00 AM
+			rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[0]);
+			REQUIRE(toss(rtnVal_dt.ToString()) == "9/20/1992 12:00:00 AM");
+		} catch (OdbcException ^ ex) {
+			WARN("TIMESTAMP OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		} catch (Exception ^ ex) {
+			WARN("TIMESTAMP Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		}
+
+		try {
+			adapter = gcnew OdbcDataAdapter("SELECT DATETIME '1992-09-20 11:30:00.123456' as dt;", Conn);
+			dt = gcnew DataTable();
+			old_buf = std::cout.rdbuf(ss.rdbuf());
+			adapter->Fill(dt);
+			std::cout.rdbuf(old_buf);
+			REQUIRE(dt->Rows->Count == 1);
+			REQUIRE(dt->Columns->Count == 1);
+			REQUIRE(toss(dt->Columns[0]->ColumnName) == "dt");
+			REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
+			// expected date and time but time is set to default 12:00:00 AM
+			rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[0]);
+			REQUIRE(toss(rtnVal_dt.ToString()) == "9/20/1992 12:00:00 AM");
+		} catch (OdbcException ^ ex) {
+			WARN("TIMESTAMP OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		} catch (Exception ^ ex) {
+			WARN("TIMESTAMP Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		}
+
+		try {
+			adapter = gcnew OdbcDataAdapter("SELECT DATETIME '1992-09-20 11:30:00' as dt;", Conn);
+			dt = gcnew DataTable();
+			old_buf = std::cout.rdbuf(ss.rdbuf());
+			adapter->Fill(dt);
+			std::cout.rdbuf(old_buf);
+			REQUIRE(dt->Rows->Count == 1);
+			REQUIRE(dt->Columns->Count == 1);
+			REQUIRE(toss(dt->Columns[0]->ColumnName) == "dt");
+			REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
+			// expected date and time but time is set to default 12:00:00 AM
+			rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[0]);
+			REQUIRE(toss(rtnVal_dt.ToString()) == "9/20/1992 12:00:00 AM");
+		} catch (OdbcException ^ ex) {
+		WARN("TIMESTAMP OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		} catch (Exception ^ ex) {
+		WARN("TIMESTAMP Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+		}
 
 		/////////////////////////////////////////////////////////////////
 		// TIMESTAMP WITH TIME ZONE	TIMESTAMPTZ		combination of time and date that uses the current time zone
@@ -797,6 +994,7 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		REQUIRE(dt->Rows->Count == 1);
 		REQUIRE(dt->Columns->Count == 1);
 		REQUIRE(toss(dt->Columns[0]->ColumnName) == "usti");
+
 		// expecting UInt16 but get Int32
 		// REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.UInt16");
 		REQUIRE(toss(dt->Columns[0]->DataType->ToString()) == "System.Byte");

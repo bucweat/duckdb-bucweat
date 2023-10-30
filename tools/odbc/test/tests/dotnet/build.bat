@@ -9,7 +9,9 @@ REM to complete in order run the test app.
 REM 
 REM Usage: build.bat [Options]
 REM
-REM Options: clean - deletes the local build directory.
+REM Options:    debug - builds debug version
+REM             release - builds release version
+REM             clean - deletes the local build directory.
 REM
 
 REM uncomment the following to provide more verbose output
