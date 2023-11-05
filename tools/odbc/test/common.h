@@ -3,6 +3,8 @@
 
 #include "catch.hpp"
 //#include "odbc_utils.hpp"
+#include <cstring>
+
 #ifdef _WIN32
 #include <Windows.h>
 #endif
