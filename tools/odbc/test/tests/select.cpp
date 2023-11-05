@@ -2,7 +2,7 @@
 
 using namespace odbc_test;
 
-TEST_CASE("Test Select Statement", "[odbc]") {
+TEST_CASE("Test Select Statement", "[odbc][select]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 
@@ -50,6 +50,14 @@ TEST_CASE("Test Select Statement", "[odbc]") {
 		DATA_CHECK(hstmt, i, std::to_string(i));
 	}
 
+	// when connecting via platform ODBC plumbing, you might get "Invalid cursor state"
+	// which may happen due to cursor being maintained in handle and is left in a
+	// invalid state from previous read. Solution is to close a cursor that has been opened
+	// on a statement and discards pending results.
+	// https://stackoverflow.com/questions/1752548/invalid-cursor-state-sql-state-24000-in-sqlexecdirect
+	// https://www.ibm.com/docs/en/db2-for-zos/11?topic=functions-sqlclosecursor-close-cursor-discard-pending-results
+	EXECUTE_AND_CHECK("SQLCloseCursor", SQLCloseCursor, hstmt);
+
 	// SELECT $x; should throw error
 	SQLRETURN ret = SQLExecDirect(hstmt, ConvertToSQLCHAR("SELECT $x"), SQL_NTS);
 	REQUIRE(ret == SQL_ERROR);
@@ -57,7 +65,7 @@ TEST_CASE("Test Select Statement", "[odbc]") {
 	std::string message;
 	ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
 	REQUIRE(state == "42000");
-	REQUIRE(duckdb::StringUtil::Contains(message, "Not all parameters are bound"));
+	REQUIRE_THAT(message, Catch::Matchers::Contains("Not all parameters are bound"));
 
 	// Free the statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);

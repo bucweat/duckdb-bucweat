@@ -2,7 +2,7 @@
 
 using namespace odbc_test;
 
-TEST_CASE("Test SQLGetDiagRec (returns diagnostic record)", "[odbc]") {
+TEST_CASE("Test SQLGetDiagRec (returns diagnostic record)", "[odbc][diagnostics]") {
 	SQLRETURN ret;
 	SQLHANDLE env;
 	SQLHANDLE dbc;
@@ -59,11 +59,28 @@ TEST_CASE("Test SQLGetDiagRec (returns diagnostic record)", "[odbc]") {
 	REQUIRE(long_message.length() > 0);
 	REQUIRE(long_state == "42000");
 
+	// expect this to be true...had to check as it seems DuckDB SQLEndTran is not getting called...
+	// BTW it does in cursor_commit.cpp 
+	SQLUSMALLINT supported = 0;
+	ret = SQLGetFunctions(dbc, SQL_API_SQLENDTRAN, &supported);
+	INFO("SQLGetFunctions for SQL_API_SQLENDTRAN " << ret << " supported " << std::boolalpha << (SQL_TRUE == supported));
+	CHECK(SQL_TRUE == supported);
+
+	// expect this to fail (per code in connection.cpp that ENV not supported) but it doesn't.
+	ret = SQLEndTran(SQL_HANDLE_ENV, env, SQL_ROLLBACK);
+	ODBC_CHECK(ret, "SQLEndTran");
+
+	// https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlendtran-function?view=sql-server-ver16
+	// "If no transactions are active, SQLEndTran returns SQL_SUCCESS with no effect on any data sources."
+	// when going through platform ODBC plumbing, it seems that the plumbing is figuring if transaction is active
+	// as DuckDB SQLEndTran is not even getting called...
+
 	/* TEST 3: Test SQLEndTran without a transaction */
 	ret = SQLEndTran(SQL_HANDLE_DBC, dbc, SQL_ROLLBACK);
-	if (ret != SQL_ERROR) {
-		FAIL("SQLEndTran should have failed because there is no transaction");
-	}
+	ODBC_CHECK(ret, "SQLEndTran");
+	//if (ret != SQL_ERROR) {
+	//	FAIL("SQLEndTran should have failed because there is no transaction");
+	//}
 
 	// Get the diagnostics
 	std::string first_endtran_state;

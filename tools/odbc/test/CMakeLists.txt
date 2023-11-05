@@ -31,4 +31,6 @@ if(CMAKE_GENERATOR MATCHES "Visual Studio")
   add_subdirectory(tests/dotnet)
 endif()
 
-target_link_libraries(test_odbc duckdb_odbc ODBC::ODBC)
+# target_link_libraries(test_odbc duckdb_odbc ODBC::ODBC)
+message("LINK_LIB_LIST " ${LINK_LIB_LIST})
+target_link_libraries(test_odbc ${LINK_LIB_LIST}  ODBC::ODBC)

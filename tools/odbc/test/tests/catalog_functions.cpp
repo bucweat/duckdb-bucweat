@@ -56,7 +56,23 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	SQLLEN row_count = 0;
 	SQLLEN len_or_ind_ptr;
 	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_INTEGER, &data_type, sizeof(data_type), &len_or_ind_ptr);
-	EXECUTE_AND_CHECK("SQLGetTypeInfo(SQL_ALL_TYPES)", SQLGetTypeInfo, hstmt, SQL_ALL_TYPES);
+
+	// when connecting via platform ODBC plumbing, you might get "Invalid cursor state"
+	// which may happen due to cursor being maintained in handle and is left in a
+	// invalid state from previous read. Solution is to close a cursor that has been opened
+	// on a statement and discards pending results.
+	// https://stackoverflow.com/questions/1752548/invalid-cursor-state-sql-state-24000-in-sqlexecdirect
+	// https://www.ibm.com/docs/en/db2-for-zos/11?topic=functions-sqlclosecursor-close-cursor-discard-pending-results
+	EXECUTE_AND_CHECK("SQLCloseCursor", SQLCloseCursor, hstmt);
+
+	SQLRETURN ret = SQLGetTypeInfo(hstmt, SQL_ALL_TYPES);
+	if (ret != SQL_SUCCESS) {
+		std::string state;
+		std::string message;
+		ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
+		WARN("SQLGetTypeInfo(): " << message);
+		CHECK(ret == SQL_SUCCESS);
+	}
 
 	SQLINTEGER data_types[] = {
 	    SQL_CHAR,
@@ -131,7 +147,8 @@ static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_ma
 			std::string state, message;
 			ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
 			REQUIRE(state == "07006");
-			REQUIRE(duckdb::StringUtil::Contains(message, "Invalid Input Error"));
+			//REQUIRE(duckdb::StringUtil::Contains(message, "Invalid Input Error"));
+			REQUIRE_THAT(message, Catch::Matchers::Contains("Invalid Input Error"));
 		} else {
 			ODBC_CHECK(ret, "SQLFetch");
 		}
@@ -215,7 +232,8 @@ static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_m
 			std::string state, message;
 			ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
 			REQUIRE(state == "07006");
-			REQUIRE(duckdb::StringUtil::Contains(message, "Invalid Input Error"));
+			//REQUIRE(duckdb::StringUtil::Contains(message, "Invalid Input Error"));
+			REQUIRE_THAT(message, Catch::Matchers::Contains("Invalid Input Error"));
 			ret = SQL_SUCCESS;
 		} else {
 			ODBC_CHECK(ret, "SQLFetch");
@@ -231,7 +249,7 @@ static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_m
 	}
 }
 
-TEST_CASE("Test Catalog Functions (SQLGetTypeInfo, SQLTables, SQLColumns, SQLGetInfo)", "[odbc]") {
+TEST_CASE("Test Catalog Functions (SQLGetTypeInfo, SQLTables, SQLColumns, SQLGetInfo)", "[odbc][catalog]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 
@@ -264,7 +282,8 @@ TEST_CASE("Test Catalog Functions (SQLGetTypeInfo, SQLTables, SQLColumns, SQLGet
 	// Test SQLGetInfo
 	char database_name[128];
 	SQLSMALLINT len;
-	EXECUTE_AND_CHECK("SQLGetInfo (SQL_TABLE_TERM)", SQLGetInfo, hstmt, SQL_TABLE_TERM, database_name,
+	// SQLGetInfo requires a connection handle
+	EXECUTE_AND_CHECK("SQLGetInfo (SQL_TABLE_TERM)", SQLGetInfo, dbc, SQL_TABLE_TERM, database_name,
 	                  sizeof(database_name), &len);
 	REQUIRE(STR_EQUAL(database_name, "table"));
 

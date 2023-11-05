@@ -2,14 +2,22 @@
 #define ODBC_TEST_COMMON_H
 
 #include "catch.hpp"
-#include "odbc_utils.hpp"
+//#include "odbc_utils.hpp"
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <sql.h>
+#include <sqltypes.h>
 #include <sqlext.h>
+
+#include <sstream>
+#include <string>
+#include <map>
 
 #define STR_EQUAL(a, b) (std::strcmp(a, b) == 0)
 

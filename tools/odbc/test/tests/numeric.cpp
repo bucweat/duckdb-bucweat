@@ -61,6 +61,15 @@ static void TestNumericResult(HSTMT &hstmt, const char *num_str, const std::stri
 
 	std::string query = "SELECT '" + std::string(num_str) + "'::numeric(" + std::to_string(precision) + "," +
 	                    std::to_string(scale) + ")";
+
+	// when connecting via platform ODBC plumbing, you might get "Invalid cursor state"
+	// which may happen due to cursor being maintained in handle and is left in a
+	// invalid state from previous read. Solution is to close a cursor that has been opened
+	// on a statement and discards pending results.
+	// https://stackoverflow.com/questions/1752548/invalid-cursor-state-sql-state-24000-in-sqlexecdirect
+	// https://www.ibm.com/docs/en/db2-for-zos/11?topic=functions-sqlclosecursor-close-cursor-discard-pending-results
+	EXECUTE_AND_CHECK("SQLCloseCursor", SQLCloseCursor, hstmt);
+
 	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt, ConvertToSQLCHAR(query), SQL_NTS);
 
 	EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
@@ -71,7 +80,7 @@ static void TestNumericResult(HSTMT &hstmt, const char *num_str, const std::stri
 	REQUIRE(ConvertHexToString(numeric.val, expected_result.length()) == expected_result);
 }
 
-TEST_CASE("Test numeric limits and conversion", "[odbc]") {
+TEST_CASE("Test numeric limits and conversion", "[odbc][numeric]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 

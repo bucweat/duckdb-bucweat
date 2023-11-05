@@ -61,7 +61,14 @@ void DATA_CHECK(HSTMT &hstmt, SQLSMALLINT col_num, const std::string expected_co
 
 	// SQLGetData returns data for a single column in the result set.
 	SQLRETURN ret = SQLGetData(hstmt, col_num, SQL_C_CHAR, content, sizeof(content), &content_len);
-	ODBC_CHECK(ret, "SQLGetData");
+	if (ret != SQL_SUCCESS) {
+		std::string state;
+		std::string message;
+		ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
+		WARN("SQLGetData(): " << message);
+		CHECK(ret == SQL_SUCCESS);
+	}
+
 	if (content_len == SQL_NULL_DATA) {
 		REQUIRE(expected_content.empty());
 		return;
@@ -107,7 +114,10 @@ void METADATA_CHECK(HSTMT &hstmt, SQLUSMALLINT col_num, const std::string &expec
 
 void DRIVER_CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc, const std::string &extra_params) {
 	std::string dsn;
-	std::string default_dsn = "duckdbmemory";
+	//std::string default_dsn = "duckdbmemory";
+	std::string default_dsn = "Driver=DuckDB Driver;Database=:memory:;";
+	//std::string default_dsn = "Driver=DuckDB Driver;Database=test.duckdb;";
+	// std::string default_dsn = "Driver=DuckDB Driver;";
 	SQLCHAR str[1024];
 	SQLSMALLINT strl;
 	auto tmp = getenv("COMMON_CONNECTION_STRING_FOR_REGRESSION_TEST");
@@ -137,12 +147,19 @@ void DRIVER_CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc, const std::strin
 
 	// SQLDriverConnect establishes connections to a driver and a data source.
 	// Supports data sources that require more connection information than the three arguments in SQLConnect.
-	EXECUTE_AND_CHECK("SQLDriverConnect", SQLDriverConnect, dbc, nullptr, ConvertToSQLCHAR(dsn.c_str()), SQL_NTS, str,
+	ret = SQLDriverConnect(dbc, nullptr, ConvertToSQLCHAR(default_dsn.c_str()), SQL_NTS, str,
 	                  sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	if (ret != SQL_SUCCESS) {
+		std::string state;
+		std::string message;
+		ACCESS_DIAGNOSTIC(state, message, dbc, SQL_HANDLE_DBC);
+		WARN("SQLConnect(" << dsn << "): " << message);
+		CHECK(ret == SQL_SUCCESS);
+	}
 }
 
 void CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc) {
-	std::string dsn = "DuckDB";
+	std::string dsn = "Driver=DuckDB Driver;";
 
 	SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
 	REQUIRE(ret == SQL_SUCCESS);
@@ -153,15 +170,29 @@ void CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc) {
 	EXECUTE_AND_CHECK("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
 
 	// SQLConnect establishes connections to a driver and a data source.
-	EXECUTE_AND_CHECK("SQLConnect", SQLConnect, dbc, ConvertToSQLCHAR(dsn.c_str()), SQL_NTS, nullptr, 0, nullptr, 0);
+	ret = SQLDriverConnect(dbc, nullptr, ConvertToSQLCHAR(dsn.c_str()), SQL_NTS, nullptr, 0, nullptr, 0);
+	if (ret != SQL_SUCCESS) {
+		std::string state;
+		std::string message;
+		ACCESS_DIAGNOSTIC(state, message, dbc, SQL_HANDLE_DBC);
+		WARN("SQLConnect(" << dsn << "): " << message);
+		CHECK(ret == SQL_SUCCESS);
+	}
 }
 
 void DISCONNECT_FROM_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc) {
-	EXECUTE_AND_CHECK("SQLFreeHandle(SQL_HANDLE_ENV)", SQLFreeHandle, SQL_HANDLE_ENV, env);
-
-	EXECUTE_AND_CHECK("SQLDisconnect", SQLDisconnect, dbc);
+	SQLRETURN ret = SQLDisconnect(dbc);
+	if (ret != SQL_SUCCESS) {
+		std::string state;
+		std::string message;
+		ACCESS_DIAGNOSTIC(state, message, dbc, SQL_HANDLE_DBC);
+		WARN("SQLDisconnect(): " << message);
+		CHECK(ret == SQL_SUCCESS);
+	}
 
 	EXECUTE_AND_CHECK("SQLFreeHandle(SQL_HANDLE_DBC)", SQLFreeHandle, SQL_HANDLE_DBC, dbc);
+
+	EXECUTE_AND_CHECK("SQLFreeHandle(SQL_HANDLE_ENV)", SQLFreeHandle, SQL_HANDLE_ENV, env);
 }
 
 void EXEC_SQL(HSTMT hstmt, const std::string &query) {
