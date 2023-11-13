@@ -26,6 +26,9 @@ add_executable(
   tests/col_attribute/col_attribute.cpp
   tests/col_attribute/char_query.cpp
   tests/col_attribute/int_query.cpp
+  tests/col_attribute/DATE_query.cpp
+  tests/col_attribute/TIME_query.cpp
+  tests/col_attribute/TIMESTAMP_query.cpp
   tests/col_attribute/utils.cpp)
 
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
