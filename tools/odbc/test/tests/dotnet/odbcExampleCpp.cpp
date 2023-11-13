@@ -27,7 +27,7 @@ static std::string toss(System::String ^ s) {
 }
 
 //*************************************************************
-// CHECKs at least C++11
+// requires at least C++11
 const std::string vformat(const char *const zcFormat, ...) {
 
 	// initialize use of the variable argument array
@@ -50,7 +50,8 @@ const std::string vformat(const char *const zcFormat, ...) {
 	return std::string(zc.data(), iLen);
 }
 
-TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI test FillSchema()", "[dotnet][odbc]") {
 
 	int rtnVal_i = 0;
 	INT8 rtnVal_i8 = 0;
@@ -65,7 +66,99 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	DateTime rtnVal_dt;
 	TimeSpan rtnVal_ts;
 	double rtnVal_d = 0;
-	System::String ^ connStr = "Driver=DuckDB Driver;Database=test.duckdb;";
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
+
+	DbCmd->CommandText = R"(
+		CREATE OR REPLACE TABLE weather(
+			city	VARCHAR,
+			temp_lo INTEGER,
+			temp_hi INTEGER,
+			prcp	FLOAT,
+			date	DATE
+		);
+	)";
+	CHECK(-1 == DbCmd->ExecuteNonQuery());
+
+	DbCmd->CommandText = R"(
+		INSERT INTO
+			weather
+		VALUES(
+			'San Francisco',
+			46,
+			50,
+			0.25,
+			'1994-11-27'
+		);
+	)";
+	CHECK(1 == DbCmd->ExecuteNonQuery());
+
+	DbCmd->CommandText = R"(
+		select count(1) from weather;
+	)";
+	Int64 weatherCount = static_cast<Int64>(DbCmd->ExecuteScalar());
+	CHECK(weatherCount == 1);
+
+	DataTable ^ dt = gcnew DataTable();
+	OdbcDataAdapter ^ adapter =
+		gcnew OdbcDataAdapter("select city, temp_lo, prcp, date from weather limit 1;", Conn);
+
+	// FillSchema() .NET code outputs some cruft so set up to capture it to a string and ignore
+	std::stringstream ss;
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
+	adapter->FillSchema(dt, SchemaType::Source);
+	std::cout.rdbuf(old_buf);
+
+	CHECK(dt->Rows->Count == 0);
+	CHECK(dt->Columns->Count == 4);
+	CHECK(toss(dt->Columns[0]->ColumnName) == "city");
+	CHECK(toss(dt->Columns[0]->DataType->ToString()) == "System.String");
+	CHECK(toss(dt->Columns[1]->ColumnName) == "temp_lo");
+	CHECK(toss(dt->Columns[1]->DataType->ToString()) == "System.Int32");
+	CHECK(toss(dt->Columns[2]->ColumnName) == "prcp");
+	CHECK(toss(dt->Columns[2]->DataType->ToString()) == "System.Double");
+	CHECK(toss(dt->Columns[3]->ColumnName) == "date");
+	CHECK(toss(dt->Columns[3]->DataType->ToString()) == "System.DateTime");
+
+	delete dt;
+	delete adapter;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI test Fill()", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
 
 	OdbcConnection ^ Conn = nullptr;
 	try {
@@ -114,11 +207,8 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	Int64 weatherCount = static_cast<Int64>(DbCmd->ExecuteScalar());
 	CHECK(weatherCount == 1);
 
-	/////////////////////////////////////////////////////////////////
-	// FillSchema() a DataTable
 	DataTable ^ dt = gcnew DataTable();
-	OdbcDataAdapter ^ adapter =
-		gcnew OdbcDataAdapter("select city, temp_lo, prcp, date from weather limit 1;", Conn);
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select city, temp_lo, prcp, date from weather limit 1;", Conn);
 
 	// FillSchema() .NET code outputs some cruft so set up to capture it to a string and ignore
 	std::stringstream ss;
@@ -137,28 +227,82 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	CHECK(toss(dt->Columns[3]->ColumnName) == "date");
 	CHECK(toss(dt->Columns[3]->DataType->ToString()) == "System.DateTime");
 
-	/////////////////////////////////////////////////////////////////
-	// Fill() DataTable directly
 	delete dt;
-	dt = gcnew DataTable();
-	adapter->Fill(dt);
-	CHECK(dt->Rows->Count == 1);
-	CHECK(dt->Columns->Count == 4);
-	CHECK(toss(dt->Columns[0]->ColumnName) == "city");
-	CHECK(toss(dt->Columns[0]->DataType->ToString()) == "System.String");
-	CHECK(toss(dt->Columns[1]->ColumnName) == "temp_lo");
-	CHECK(toss(dt->Columns[1]->DataType->ToString()) == "System.Int32");
-	CHECK(toss(dt->Columns[2]->ColumnName) == "prcp");
-	CHECK(toss(dt->Columns[2]->DataType->ToString()) == "System.Double");
-	CHECK(toss(dt->Columns[3]->ColumnName) == "date");
-	CHECK(toss(dt->Columns[3]->DataType->ToString()) == "System.DateTime");
-	CHECK(toss(dt->Rows[0]->ItemArray[0]->ToString()) == "San Francisco");
-	CHECK(toss(dt->Rows[0]->ItemArray[1]->ToString()) == "46");
-	CHECK(toss(dt->Rows[0]->ItemArray[2]->ToString()) == "0.25");
-	CHECK(toss(dt->Rows[0]->ItemArray[3]->ToString()) == "11/27/1994 12:00:00 AM");
+	delete adapter;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI  Fill() Dataset then look at the Datatable", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	/////////////////////////////////////////////////////////////////
-	// Fill() Dataset then look at the Datatable
+	// create weather table
+	DbCmd->CommandText = R"(
+		CREATE OR REPLACE TABLE weather(
+			city	VARCHAR,
+			temp_lo INTEGER,
+			temp_hi INTEGER,
+			prcp	FLOAT,
+			date	DATE
+		);
+	)";
+	CHECK(-1 == DbCmd->ExecuteNonQuery());
+
+	DbCmd->CommandText = R"(
+		INSERT INTO
+			weather
+		VALUES(
+			'San Francisco',
+			46,
+			50,
+			0.25,
+			'1994-11-27'
+		);
+	)";
+	CHECK(1 == DbCmd->ExecuteNonQuery());
+
+	DbCmd->CommandText = R"(
+		select count(1) from weather;
+	)";
+	Int64 weatherCount = static_cast<Int64>(DbCmd->ExecuteScalar());
+	CHECK(weatherCount == 1);
+
+	DataTable ^ dt = gcnew DataTable();
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select city, temp_lo, prcp, date from weather limit 1;", Conn);
+
 	delete dt;
 	dt = gcnew DataTable();
 	DataSet ^ ds = gcnew DataSet();
@@ -181,35 +325,77 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 
 	delete dt;
 	delete adapter;
+	delete ds;
+	delete adapter;
+	delete DbCmd;
 
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - Use DataReader and access the data.", "[dotnet][odbc][datareader]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 	DbCmd->CommandText = R"(
-		CREATE OR REPLACE TABLE cities(
-			name VARCHAR,
-			lat DECIMAL,
-			lon DECIMAL
+		CREATE OR REPLACE TABLE weather(
+			city	VARCHAR,
+			temp_lo INTEGER,
+			temp_hi INTEGER,
+			prcp	FLOAT,
+			date	DATE
 		);
 	)";
 	CHECK(-1 == DbCmd->ExecuteNonQuery());
 
 	DbCmd->CommandText = R"(
 		INSERT INTO
-			cities
+			weather
 		VALUES(
 			'San Francisco',
-			-194.0,
-			53.0
+			46,
+			50,
+			0.25,
+			'1994-11-27'
 		);
 	)";
 	CHECK(1 == DbCmd->ExecuteNonQuery());
 
 	DbCmd->CommandText = R"(
-		select count(1) from cities;
+		select count(1) from weather;
 	)";
-	Int64 citiesCount = static_cast<Int64>(DbCmd->ExecuteScalar());
-	CHECK(1 == citiesCount);
+	Int64 weatherCount = static_cast<Int64>(DbCmd->ExecuteScalar());
+	CHECK(weatherCount == 1);
 
-	/////////////////////////////////////////////////////////////////
-	// Use DataReader and access the data.
 	DbCmd->CommandText = R"(
 		select * from weather;
 	)";
@@ -234,15 +420,45 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 
 	DbReader->Close();
 	delete DbReader;
+	delete DbCmd;
 
-	/////////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////////
-	// look at how ODBC handles all of the DuckDB supported data types
-	// https://duckdb.org/docs/sql/data_types/overview#general-purpose-data-types
-	/////////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////////
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test BIGINT", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	/////////////////////////////////////////////////////////////////
 	// BIGINT		INT8, LONG					signed eight-byte integer
@@ -263,9 +479,11 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	)";
 	CHECK(1 == DbCmd->ExecuteNonQuery());
 
-	adapter = gcnew OdbcDataAdapter("select * from biginttest;", Conn);
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from biginttest;", Conn);
+	DataTable ^ dt = gcnew DataTable();
 	dt = gcnew DataTable();
-	old_buf = std::cout.rdbuf(ss.rdbuf());
+	std::stringstream ss;
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	adapter->Fill(dt);
 	std::cout.rdbuf(old_buf);
 
@@ -280,24 +498,178 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 
 	delete dt;
 	delete adapter;
+	delete DbCmd;
 
-	/////////////////////////////////////////////////////////////////
-	// BIT			BITSTRING					string of 1’s and 0’s
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
 
-	/////////////////////////////////////////////////////////////////
-	// BOOLEAN		BOOL, LOGICAL				logical boolean (true/false)
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test BIT", "[dotnet][odbc]") {
 
-	/////////////////////////////////////////////////////////////////
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
+
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test BOOLEAN", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
+
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test BLOB", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
 	// BLOB			BYTEA, BINARY, VARBINARY	variable-length binary data
 
-	/////////////////////////////////////////////////////////////////
-	// DATE	 									calendar date (year, month day)
+	OdbcConnection ^ Conn = nullptr;
 	try {
-		adapter = gcnew OdbcDataAdapter("SELECT DATE '1992-09-20' as d, DATE '1992-03-22' + 5 as d2, 'epoch'::DATE as e;", Conn);
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
+
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test DATE", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
+
+	try {
+		DataTable ^ dt = gcnew DataTable();
+		std::stringstream ss;
+		OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter(
+		    "SELECT DATE '1992-09-20' as d, DATE '1992-03-22' + 5 as d2, 'epoch'::DATE as e;", Conn);
 		dt = gcnew DataTable();
-		old_buf = std::cout.rdbuf(ss.rdbuf());
+		auto old_buf = std::cout.rdbuf(ss.rdbuf());
 		adapter->Fill(dt);
 		std::cout.rdbuf(old_buf);
+
 		CHECK(dt->Rows->Count == 1);
 		CHECK(dt->Columns->Count == 3);
 		CHECK(toss(dt->Columns[0]->ColumnName) == "d");
@@ -319,6 +691,46 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 		INFO("DATE Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
 		CHECK(false);
 	}
+
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test DOUBLE", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	/////////////////////////////////////////////////////////////////
 	// DOUBLE		FLOAT8, NUMERIC, DECIMAL	double precision floating-point number (8 bytes)
@@ -349,9 +761,11 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	rtnVal_i = DbCmd->ExecuteNonQuery();
 	CHECK(1 == rtnVal_i);
 
-	adapter = gcnew OdbcDataAdapter("select * from doubletest;", Conn);
+	DataTable ^ dt = gcnew DataTable();
+	std::stringstream ss;
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from doubletest;", Conn);
 	dt = gcnew DataTable();
-	old_buf = std::cout.rdbuf(ss.rdbuf());
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	adapter->Fill(dt);
 	std::cout.rdbuf(old_buf);
 
@@ -399,6 +813,45 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 
 	delete dt;
 	delete adapter;
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test HUGEINT", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	/////////////////////////////////////////////////////////////////
 	// HUGEINT	 								signed sixteen-byte integer
@@ -419,9 +872,11 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	rtnVal_i = DbCmd->ExecuteNonQuery();
 	CHECK(1 == rtnVal_i);
 
-	adapter = gcnew OdbcDataAdapter("select * from huge_int;", Conn);
+	DataTable ^ dt = gcnew DataTable();
+	std::stringstream ss;
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from huge_int;", Conn);
 	dt = gcnew DataTable();
-	old_buf = std::cout.rdbuf(ss.rdbuf());
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	adapter->Fill(dt);
 	std::cout.rdbuf(old_buf);
 
@@ -448,6 +903,46 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 			            Catch::Matchers::Contains("is out of range for the destination type INT128"));
 	}
 
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - 4 byte INT", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
+
 	/////////////////////////////////////////////////////////////////
 	// INTEGER		INT4, INT, SIGNED			signed four-byte integer
 	DbCmd->CommandText = R"(
@@ -469,9 +964,11 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	rtnVal_i = DbCmd->ExecuteNonQuery();
 	CHECK(1 == rtnVal_i);
 
-	adapter = gcnew OdbcDataAdapter("select * from int4b;", Conn);
+	DataTable ^ dt = gcnew DataTable();
+	std::stringstream ss;
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from int4b;", Conn);
 	dt = gcnew DataTable();
-	old_buf = std::cout.rdbuf(ss.rdbuf());
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	adapter->Fill(dt);
 	std::cout.rdbuf(old_buf);
 
@@ -529,8 +1026,89 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 			            Catch::Matchers::Contains("table int4b has 3 columns but 1 values were supplied"));
 	}
 
-	/////////////////////////////////////////////////////////////////
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test INTERVAL", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
+
 	// INTERVAL	 								date / time delta
+
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test 4 byte FLOAT", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+		CHECK(false);
+		return;
+	} catch (Exception ^ ex) {
+		INFO("Exception: {" << toss(ex->Message) << "}");
+		CHECK(false);
+		return;
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	/////////////////////////////////////////////////////////////////
 	// REAL			FLOAT4, FLOAT				single precision floating-point number (4 bytes)
@@ -552,9 +1130,11 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	rtnVal_i = DbCmd->ExecuteNonQuery();
 	CHECK(1 == rtnVal_i);
 
-	adapter = gcnew OdbcDataAdapter("select * from spfp4;", Conn);
+	DataTable ^ dt = gcnew DataTable();
+	std::stringstream ss;
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from spfp4;", Conn);
 	dt = gcnew DataTable();
-	old_buf = std::cout.rdbuf(ss.rdbuf());
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	adapter->Fill(dt);
 	std::cout.rdbuf(old_buf);
 
@@ -574,6 +1154,49 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	CHECK_THAT(rtnVal_d, Catch::Matchers::WithinAbs(3.402823466e+38F, 1.0));
 	rtnVal_d = static_cast<double>(dt->Rows[1]->ItemArray[1]);
 	CHECK_THAT(rtnVal_d, Catch::Matchers::WithinAbs(3.402823466e+38F, 1.0));
+
+	delete dt;
+	delete adapter;
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test 2 byte INT", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+		CHECK(false);
+		return;
+	} catch (Exception ^ ex) {
+		INFO("Exception: {" << toss(ex->Message) << "}");
+		CHECK(false);
+		return;
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	/////////////////////////////////////////////////////////////////
 	// SMALLINT		INT2, SHORT					signed two-byte integer
@@ -595,9 +1218,11 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	rtnVal_i = DbCmd->ExecuteNonQuery();
 	CHECK(1 == rtnVal_i);
 
-	adapter = gcnew OdbcDataAdapter("select * from int2b;", Conn);
+	DataTable ^ dt = gcnew DataTable();
+	std::stringstream ss;
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from int2b;", Conn);
 	dt = gcnew DataTable();
-	old_buf = std::cout.rdbuf(ss.rdbuf());
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	adapter->Fill(dt);
 	std::cout.rdbuf(old_buf);
 
@@ -634,47 +1259,95 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 			            Catch::Matchers::Contains("is out of range for the destination type INT16"));
 	}
 
-	/////////////////////////////////////////////////////////////////
-	// TIME	 									time of day (no time zone)
+	delete dt;
+	delete adapter;
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test TIME", "[dotnet][odbc][time]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;Database=time.duckdb;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+		CHECK(false);
+		return;
+	} catch (Exception ^ ex) {
+		INFO("Exception: {" << toss(ex->Message) << "}");
+		CHECK(false);
+		return;
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	// all of the time examples return TimeSpan which is incorrect
-	// looking at the ODBC log it reports type SQL_TYPE_TIME which seems correct...
-	// seems that .Net is not returning the correct typee
+	// looking at the ODBC trace log SQLColAttribute reports type SQL_TYPE_TIME
+	// which seems correct...seems that .Net is not returning the correct type
 
-	//try {
-	//	DbCmd->CommandText = R"(
-	//	CREATE OR REPLACE TABLE time(
-	//		t TIME
-	//	);
-	//	)";
-	//	CHECK(-1 == DbCmd->ExecuteNonQuery());
+	try {
+		DbCmd->CommandText = R"(
+		CREATE OR REPLACE TABLE time(
+			t TIME
+		);
+		)";
+		CHECK(-1 == DbCmd->ExecuteNonQuery());
 
-	//	DbCmd->CommandText = R"(
-	//		INSERT INTO
-	//			time
-	//		VALUES
-	//			('11:30:00');
-	//	)";
-	//	rtnVal_i = DbCmd->ExecuteNonQuery();
-	//	CHECK(1 == rtnVal_i);
-	//	adapter = gcnew OdbcDataAdapter("select * from time;", Conn);
-	//	dt = gcnew DataTable();
-	//	old_buf = std::cout.rdbuf(ss.rdbuf());
-	//	adapter->Fill(dt);
-	//	std::cout.rdbuf(old_buf);
-	//	CHECK(dt->Rows->Count == 1);
-	//	CHECK(dt->Columns->Count == 1);
-	//	CHECK(toss(dt->Columns[0]->ColumnName) == "t");
-	//	CHECK(toss(dt->Columns[0]->DataType->ToString()) == "System.TimeSpan");
-	//	rtnVal_ts = static_cast<TimeSpan>(dt->Rows[0]->ItemArray[0]);
-	//	CHECK(toss(rtnVal_dt.ToString("hh:mm:ss")) == "11:30:00");
-	//} catch (OdbcException ^ ex) {
-	//INFO("TIME OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
-	//CHECK(false);
-	//} catch (Exception ^ ex) {
-	//INFO("TIME Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
-	//CHECK(false);
-	//}
+		DbCmd->CommandText = R"(
+			INSERT INTO
+				time
+			VALUES
+				('12:34:56');
+		)";
+		rtnVal_i = DbCmd->ExecuteNonQuery();
+		CHECK(1 == rtnVal_i);
+
+		DataTable ^ dt = gcnew DataTable();
+		std::stringstream ss;
+		OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from time;", Conn);
+		dt = gcnew DataTable();
+		auto old_buf = std::cout.rdbuf(ss.rdbuf());
+		adapter->Fill(dt);
+		std::cout.rdbuf(old_buf);
+		CHECK(dt->Rows->Count == 1);
+		CHECK(dt->Columns->Count == 1);
+		CHECK(toss(dt->Columns[0]->ColumnName) == "t");
+		CHECK(toss(dt->Columns[0]->DataType->ToString()) == "System.TimeSpan");
+
+
+		rtnVal_ts = static_cast<TimeSpan>(dt->Rows[0]->ItemArray[0]);
+		CHECK(toss(rtnVal_dt.ToString("hh:mm:ss")) == "12:34:56");
+		delete dt;
+		delete adapter;
+		delete DbCmd;
+	} catch (OdbcException ^ ex) {
+	INFO("TIME OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+	CHECK(false);
+	} catch (Exception ^ ex) {
+	INFO("TIME Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+	CHECK(false);
+	}
 
 	//try {
 	//	adapter = gcnew OdbcDataAdapter("SELECT TIME '11:30:00' as t;", Conn);
@@ -716,21 +1389,66 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	// CHECK(false);
 	// }
 
-	/////////////////////////////////////////////////////////////////
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test TIMESTAMP/DATETIME", "[dotnet][odbc][timestamp]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+		CHECK(false);
+		return;
+	} catch (Exception ^ ex) {
+		INFO("Exception: {" << toss(ex->Message) << "}");
+		CHECK(false);
+		return;
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
+
 	// TIMESTAMP		DATETIME					combination of time and date
 	try {
-		adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP '1992-09-20 11:30:00.123456' as dt;", Conn);
+		DataTable ^ dt = gcnew DataTable();
+		std::stringstream ss;
+		OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP '1992-09-20 12:34:56.123456' as dt;", Conn);
 		dt = gcnew DataTable();
-		old_buf = std::cout.rdbuf(ss.rdbuf());
+		//auto old_buf = std::cout.rdbuf(ss.rdbuf());
 		adapter->Fill(dt);
-		std::cout.rdbuf(old_buf);
+		//std::cout.rdbuf(old_buf);
 		CHECK(dt->Rows->Count == 1);
 		CHECK(dt->Columns->Count == 1);
 		CHECK(toss(dt->Columns[0]->ColumnName) == "dt");
 		CHECK(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
 		// .Net does not handle fractional seconds...
 		rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[0]);
-		CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.fff")) == "1992-09-20 11:30:00.000");
+		CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.fff")) == "1992-09-20 12:34:56.000");
+		delete dt;
+		delete adapter;
+		delete DbCmd;
 	} catch (OdbcException ^ ex) {
 		INFO("TIMESTAMP OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
 		CHECK(false);
@@ -740,19 +1458,23 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	}
 
 	try {
-		// DATETIME with fractional sec
-		adapter = gcnew OdbcDataAdapter("SELECT DATETIME '1992-09-20 11:30:00.123456' as dt;", Conn);
+		DataTable ^ dt = gcnew DataTable();
+		std::stringstream ss;
+		OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("SELECT DATETIME '1992-09-20 12:34:56.123456' as dt;", Conn);
 		dt = gcnew DataTable();
-		old_buf = std::cout.rdbuf(ss.rdbuf());
+		//auto old_buf = std::cout.rdbuf(ss.rdbuf());
 		adapter->Fill(dt);
-		std::cout.rdbuf(old_buf);
+		//std::cout.rdbuf(old_buf);
 		CHECK(dt->Rows->Count == 1);
 		CHECK(dt->Columns->Count == 1);
 		CHECK(toss(dt->Columns[0]->ColumnName) == "dt");
 		CHECK(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
 		// .Net does not handle fractional seconds...
 		rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[0]);
-		CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.fff")) == "1992-09-20 11:30:00.000");
+		CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.fff")) == "1992-09-20 12:34:56.000");
+		delete dt;
+		delete adapter;
+		delete DbCmd;
 	} catch (OdbcException ^ ex) {
 		INFO("DATETIME OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
 		CHECK(false);
@@ -762,91 +1484,152 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	}
 
 	// currently this data type does not work
+
 	//try {
-	//	adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP_NS '1992-09-20 11:30:00.123456' as dt;", Conn);
+	//	DataTable ^ dt = gcnew DataTable();
+	//	std::stringstream ss;
+	//	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP_NS '1992-09-20 12:34:56.123456' as dt;", Conn);
 	//	dt = gcnew DataTable();
-	//	old_buf = std::cout.rdbuf(ss.rdbuf());
+	//	//auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	//	adapter->Fill(dt);
-	//	std::cout.rdbuf(old_buf);
+	//	//std::cout.rdbuf(old_buf);
 	//	CHECK(dt->Rows->Count == 1);
 	//	CHECK(dt->Columns->Count == 1);
 	//	CHECK(toss(dt->Columns[0]->ColumnName) == "dt");
 	//	CHECK(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
 	//	// .Net does not handle fractional seconds...
-	//	CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.ffffff")) == "1992-09-20 11:30:00.000000");
-	//} catch (OdbcException ^ ex) {
+	//	CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.ffffff")) == "1992-09-20 12:34:56.000000");
+	//	delete dt;
+	//	delete adapter;
+	//	delete DbCmd;
+	// } catch (OdbcException ^ ex) {
 	//	INFO("TIMESTAMP_NS OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
-	// CHECK(false);
+	//	CHECK(false);
 	//} catch (Exception ^ ex) {
 	//	INFO("TIMESTAMP_NS Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
-	// CHECK(false);
+	//    CHECK(false);
 	//}
 
 	// currently this data type does not work
+	
 	//try {
-	//	adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP_MS '1992-09-20 11:30:00.123456' as dt;", Conn);
+	//	DataTable ^ dt = gcnew DataTable();
+	//	std::stringstream ss;
+	//	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP_MS '1992-09-20 12:34:56.123456' as dt;", Conn);
 	//	dt = gcnew DataTable();
-	//	old_buf = std::cout.rdbuf(ss.rdbuf());
+	//	// auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	//	adapter->Fill(dt);
-	//	std::cout.rdbuf(old_buf);
+	//	// std::cout.rdbuf(old_buf);
 	//	CHECK(dt->Rows->Count == 1);
 	//	CHECK(dt->Columns->Count == 1);
 	//	CHECK(toss(dt->Columns[0]->ColumnName) == "dt");
 	//	CHECK(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
 	//	// .Net does not handle fractional seconds...
-	//	CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.fff")) == "1992-09-20 11:30:00.000");
+	//	CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.fff")) == "1992-09-20 12:34:56.000");
+	//	delete dt;
+	//	delete adapter;
+	//	delete DbCmd;
 	//} catch (OdbcException ^ ex) {
 	//	INFO("TIMESTAMP_MS OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
-	// CHECK(false);
+	//	CHECK(false);
 	//} catch (Exception ^ ex) {
 	//	INFO("TIMESTAMP_MS Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
-	// CHECK(false);
+	//	CHECK(false);
 	//}
 
 	// currently this data type does not work
+	
 	//try {
-	//	adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP_S '1992-09-20 11:30:00.123456' as dt;", Conn);
+	//	DataTable ^ dt = gcnew DataTable();
+	//	std::stringstream ss;
+	//	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("SELECT TIMESTAMP_S '1992-09-20 12:34:56.123456' as dt;", Conn);
 	//	dt = gcnew DataTable();
-	//	old_buf = std::cout.rdbuf(ss.rdbuf());
+	//	//auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	//	adapter->Fill(dt);
-	//	std::cout.rdbuf(old_buf);
+	//	//std::cout.rdbuf(old_buf);
 	//	CHECK(dt->Rows->Count == 1);
 	//	CHECK(dt->Columns->Count == 1);
 	//	CHECK(toss(dt->Columns[0]->ColumnName) == "dt");
 	//	CHECK(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
 	//	// .Net does not handle fractional seconds...
 	//	rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[0]);
-	//	CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.fff")) == "1992-09-20 11:30:00.000");
+	//	CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.fff")) == "1992-09-20 12:34:56.000");
+	//	delete dt;
+	//	delete adapter;
+	//	delete DbCmd;
 	//} catch (OdbcException ^ ex) {
-	// CHECK(false);
 	//	INFO("TIMESTAMP_S OdbcException[" << __LINE__<< "]: {" << toss(ex->Message) << "}");
+	//	CHECK(false);
 	//} catch (Exception ^ ex) {
 	//	INFO("TIMESTAMP_S Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
-	// CHECK(false);
+	//	CHECK(false);
 	//}
 
-	/////////////////////////////////////////////////////////////////
-	// TIMESTAMP WITH TIME ZONE	TIMESTAMPTZ		combination of time and date that uses the current time zone
-	//try {
-	//	adapter = gcnew OdbcDataAdapter("SELECT '1992-09-20 11:30:00.123-07'::TIMESTAMPTZ as dt;", Conn);
+	 // currently this data type does not work
+	 
+	// try {
+	//	DataTable ^ dt = gcnew DataTable();
+	//	std::stringstream ss;
+	//	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("SELECT '1992-09-20 12:34:56.123-07'::TIMESTAMPTZ as dt;", Conn);
 	//	dt = gcnew DataTable();
-	//	old_buf = std::cout.rdbuf(ss.rdbuf());
+	//	//autp old_buf = std::cout.rdbuf(ss.rdbuf());
 	//	adapter->Fill(dt);
-	//	std::cout.rdbuf(old_buf);
+	//	//std::cout.rdbuf(old_buf);
 	//	CHECK(dt->Rows->Count == 1);
 	//	CHECK(dt->Columns->Count == 1);
 	//	CHECK(toss(dt->Columns[0]->ColumnName) == "dt");
 	//	CHECK(toss(dt->Columns[0]->DataType->ToString()) == "System.DateTime");
 	//	// .Net does not handle fractional seconds...
 	//	rtnVal_dt = static_cast<DateTime>(dt->Rows[0]->ItemArray[0]);
-	//	CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.fff")) == "1992-09-20 11:30:00.000");
-	//} catch (OdbcException ^ ex) {
-	// CHECK(false);
+	//	CHECK(toss(rtnVal_dt.ToString("yyyy-MM-dd hh:mm:ss.fff")) == "1992-09-20 12:34:56.000");
+	//	delete dt;
+	//	delete adapter;
+	//	delete DbCmd;
+	// } catch (OdbcException ^ ex) {
 	//	INFO("TIMESTAMPTZ OdbcException[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
+	//	CHECK(false);
 	//} catch (Exception ^ ex) {
 	//	INFO("TIMESTAMPTZ Exception[" << __LINE__ << "]: {" << toss(ex->Message) << "}");
-	// CHECK(false);
+	//	CHECK(false);
 	//}
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - 1 byte INT", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	/////////////////////////////////////////////////////////////////
 	// TINYINT		INT1						signed one-byte integer
@@ -868,9 +1651,11 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	rtnVal_i = DbCmd->ExecuteNonQuery();
 	CHECK(1 == rtnVal_i);
 
-	adapter = gcnew OdbcDataAdapter("select * from sti;", Conn);
+	DataTable ^ dt = gcnew DataTable();
+	std::stringstream ss;
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from sti;", Conn);
 	dt = gcnew DataTable();
-	old_buf = std::cout.rdbuf(ss.rdbuf());
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	adapter->Fill(dt);
 	std::cout.rdbuf(old_buf);
 
@@ -908,6 +1693,48 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 		CHECK_THAT(toss(ex->Message), Catch::Matchers::Contains("is out of range for the destination type INT8"));
 	}
 
+	delete dt;
+	delete adapter;
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test UBIGINT", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
+
 	/////////////////////////////////////////////////////////////////
 	// UBIGINT	 								unsigned eight-byte integer
 	DbCmd->CommandText = R"(
@@ -926,9 +1753,11 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	rtnVal_i = DbCmd->ExecuteNonQuery();
 	CHECK(1 == rtnVal_i);
 
-	adapter = gcnew OdbcDataAdapter("select * from ubi;", Conn);
+	DataTable ^ dt = gcnew DataTable();
+	std::stringstream ss;
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from ubi;", Conn);
 	dt = gcnew DataTable();
-	old_buf = std::cout.rdbuf(ss.rdbuf());
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	adapter->Fill(dt);
 	std::cout.rdbuf(old_buf);
 
@@ -942,6 +1771,48 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 
 	rtnVal_dec = static_cast<Decimal>(dt->Rows[0]->ItemArray[0]);
 	CHECK(rtnVal_dec == 18446744073709551615UL);
+
+	delete dt;
+	delete adapter;
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test 4 byte UINTEGER", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	/////////////////////////////////////////////////////////////////
 	// UINTEGER	 								unsigned four-byte integer
@@ -961,9 +1832,11 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	rtnVal_i = DbCmd->ExecuteNonQuery();
 	CHECK(1 == rtnVal_i);
 
-	adapter = gcnew OdbcDataAdapter("select * from uint;", Conn);
+	DataTable ^ dt = gcnew DataTable();
+	std::stringstream ss;
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from uint;", Conn);
 	dt = gcnew DataTable();
-	old_buf = std::cout.rdbuf(ss.rdbuf());
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	adapter->Fill(dt);
 	std::cout.rdbuf(old_buf);
 
@@ -976,6 +1849,48 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 
 	rtnVal_i64 = static_cast<Int64>(dt->Rows[0]->ItemArray[0]);
 	CHECK(rtnVal_i64 == 4294967295);
+
+	delete dt;
+	delete adapter;
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test 2 byte USMALLINT", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	/////////////////////////////////////////////////////////////////
 	// USMALLINT	 								unsigned two-byte integer
@@ -995,9 +1910,11 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	rtnVal_i = DbCmd->ExecuteNonQuery();
 	CHECK(1 == rtnVal_i);
 
-	adapter = gcnew OdbcDataAdapter("select * from ui2b;", Conn);
+	DataTable ^ dt = gcnew DataTable();
+	std::stringstream ss;
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from ui2b;", Conn);
 	dt = gcnew DataTable();
-	old_buf = std::cout.rdbuf(ss.rdbuf());
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	adapter->Fill(dt);
 	std::cout.rdbuf(old_buf);
 
@@ -1010,6 +1927,48 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 
 	rtnVal_i32 = static_cast<Int32>(dt->Rows[0]->ItemArray[0]);
 	CHECK(rtnVal_i32 == 65535);
+
+	delete dt;
+	delete adapter;
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test 1 byte UTINYINT", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	/////////////////////////////////////////////////////////////////
 	// UTINYINT	 								unsigned one-byte integer
@@ -1029,9 +1988,11 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	rtnVal_i = DbCmd->ExecuteNonQuery();
 	CHECK(1 == rtnVal_i);
 
-	adapter = gcnew OdbcDataAdapter("select * from usti;", Conn);
+	DataTable ^ dt = gcnew DataTable();
+	std::stringstream ss;
+	OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from usti;", Conn);
 	dt = gcnew DataTable();
-	old_buf = std::cout.rdbuf(ss.rdbuf());
+	auto old_buf = std::cout.rdbuf(ss.rdbuf());
 	adapter->Fill(dt);
 	std::cout.rdbuf(old_buf);
 
@@ -1041,6 +2002,48 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 	CHECK(toss(dt->Columns[0]->DataType->ToString()) == "System.Byte");
 	rtnVal_ui8 = static_cast<UINT8>(dt->Rows[0]->ItemArray[0]);
 	CHECK(rtnVal_ui8 == 255);
+
+	delete dt;
+	delete adapter;
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test UUID", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
 
 	/////////////////////////////////////////////////////////////////
 	// UUID	 									UUID data type
@@ -1060,9 +2063,12 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 		)";
 		rtnVal_i = DbCmd->ExecuteNonQuery();
 		CHECK(1 == rtnVal_i);
-		adapter = gcnew OdbcDataAdapter("select * from uuid;", Conn);
+
+		DataTable ^ dt = gcnew DataTable();
+		std::stringstream ss;
+		OdbcDataAdapter ^ adapter = gcnew OdbcDataAdapter("select * from uuid;", Conn);
 		dt = gcnew DataTable();
-		old_buf = std::cout.rdbuf(ss.rdbuf());
+		auto old_buf = std::cout.rdbuf(ss.rdbuf());
 		try {
 			adapter->Fill(dt);
 		} catch (Exception ^ ex) {
@@ -1086,12 +2092,53 @@ TEST_CASE("System.Data.ODBC .NET tests written in C++/CLI", "[dotnet][odbc]") {
 		CHECK(false);
 	}
 
-	/////////////////////////////////////////////////////////////////
-	// VARCHAR		CHAR, BPCHAR, TEXT, STRING	variable-length character string
-
+	delete DbCmd;
 
 	if (Conn != nullptr) {
 		delete Conn;
 	}
-	
+}
+
+//*************************************************************
+TEST_CASE("System.Data.ODBC .NET C++/CLI - test VARCHAR and friends", "[dotnet][odbc]") {
+
+	int rtnVal_i = 0;
+	INT8 rtnVal_i8 = 0;
+	Int16 rtnVal_i16 = 0;
+	Int32 rtnVal_i32 = 0;
+	Int64 rtnVal_i64 = 0;
+	UINT8 rtnVal_ui8 = 0;
+	UInt16 rtnVal_ui16 = 0;
+	UInt32 rtnVal_ui32 = 0;
+	UInt64 rtnVal_ui64 = 0;
+	Decimal rtnVal_dec = 0;
+	DateTime rtnVal_dt;
+	TimeSpan rtnVal_ts;
+	double rtnVal_d = 0;
+	System::String ^ connStr = "Driver=DuckDB Driver;";
+
+	OdbcConnection ^ Conn = nullptr;
+	try {
+		Conn = gcnew OdbcConnection(connStr);
+		Conn->Open();
+	} catch (OdbcException ^ ex) {
+
+		INFO("OdbcException: {" << toss(ex->Message) << "}");
+
+	} catch (Exception ^ ex) {
+
+		INFO("Exception: {" << toss(ex->Message) << "}");
+	}
+
+	OdbcCommand ^ DbCmd = Conn->CreateCommand();
+
+	// VARCHAR		CHAR, BPCHAR, TEXT, STRING	variable-length character string
+
+
+
+	delete DbCmd;
+
+	if (Conn != nullptr) {
+		delete Conn;
+	}
 }
